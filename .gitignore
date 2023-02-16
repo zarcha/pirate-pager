@@ -1,10 +1,13 @@
 node/__pycache__
 node/Pipfile
+node/__MACOSX
 
 manager/__pycache__
 manager/pager.db
 manager/Pipfile
+manager/__MACOSX
 
 **/.DS_Store
 
 .DS_Store
+__MACOSX
