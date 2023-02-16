@@ -19,7 +19,7 @@ def page():
   if not verifyFreqRange(body["frequency"]):
     return "Not in frequency range of server",500
   options = ""
-  if body["capcode"].isnumeric():
+  if body["type"] == "NUMERIC":
     options = "-n"
   page_command = subprocess.run("echo -e \"%s:%s\" | ./pocsag -f %se6 -t 1 %s" % (body["capcode"], body["msg"], body["frequency", options]), shell=True, executable='/bin/bash')
   if page_command.returncode == 0:
@@ -39,11 +39,15 @@ def verifyFreqRange(msgFreq):
   return True
 
 def registerWithManager():
-  req = requests.post("%s/addnode" % (configs.get("manager").data), json = {"name": configs.get("name").data, "address":"http://%s:%s" % (configs.get("ip").data, configs.get("port").data), "location": configs.get("location").data, "frequencies": configs.get("frequencies").data})
-  if req.status_code == 200:
-    print ("Node has been registered with the pager management server.")
-  else:
-    raise ValueError("Node failed to register with pager management server: %s" % req.text)
+  try:
+    req = requests.post("%s/addnode" % (configs.get("manager").data), json = {"name": configs.get("name").data, "address":"http://%s:%s" % (configs.get("ip").data, configs.get("port").data), "location": configs.get("location").data, "frequencies": configs.get("frequencies").data})
+    if req.status_code == 200:
+      print ("Node has been registered with the pager management server.")
+    else:
+      raise ValueError("Node failed to register with pager management server: %s" % req.text)
+  except requests.exceptions.RequestException:
+    print ("Node failed to connect to management server.")
+    exit()
   return
 
 registerWithManager()
