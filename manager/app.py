@@ -55,7 +55,7 @@ def webAddPager():
         </select>
         <label for="msg">Nodes (Comma seperated list of node to receive pages from):</label><br>
         <input type="text" style="width: 100%; height: 30px" id="nodes" name="nodes" value="" required><br><br>
-        <input type="submit" style="width: 70px; height: 30px; font-weight: bold" value="Send">
+        <input type="submit" style="width: 70px; height: 30px; font-weight: bold" value="Add">
     </form>"""
     return createHtmlPage(html), 200
 
@@ -177,10 +177,11 @@ def sendPageToNodes(keys, msg):
             pager = pager[0]
 
         if pager:
-            if pager[2] == "NUMERIC" and not msg.isnumeric():
+            if pager[4] == "NUMERIC" and not msg.isnumeric():
                 return "Pager is numeric and the message contains alphanumeric content. Please revise the message and resend."
             for node in pager[3].split(","):
-                res = cur.execute("SELECT address FROM nodes WHERE name='%s'" % node.strip())
+                node = node.strip()
+                res = cur.execute("SELECT address FROM nodes WHERE name='%s'" % node)
                 nodeAddress = res.fetchone()
                 if nodeAddress:
                     nodeAddress = nodeAddress[0]
@@ -189,10 +190,10 @@ def sendPageToNodes(keys, msg):
                         print ("Sent message to %s for %s with msg %s at freq %s" % (nodeAddress, pager[0], msg, pager[1]))
                         return req.text
                     except requests.exceptions.RequestException:
-                        print ("Node %s is not avalible." % node.strip())
-                        return "Node %s is not avalible." % node.strip()
+                        print ("Node %s is not avalible." % node)
+                        return "Node %s is not avalible." % node
                 else:
-                    return "Node %s does not exist." % node.strip()
+                    return "Node %s does not exist." % node
         else:
             return "Pager does not exist."
 
@@ -219,7 +220,7 @@ def addPagerToDB(handle, capcode, frequency, baud, type, nodes):
 def validateMsg(msg):
     if len(msg) > 800:
         return "Message can only be 800 characters long. Please resend with a smaller message."
-    search=re.compile(r'[^a-zA-Z0-9!@#$%^&*()-_=+{[\]}|\\:;"\'?/><,]').search
+    search=re.compile(r'w/[^a-zA-Z0-9!@#$%^&*()-_=+{[\]}|\\:;"\'?/><,]').search
     if bool(search(msg)):
         return "Message contains invalid characters. Please resend with a proper message containing letters, numbers, and normal special characters."
 
