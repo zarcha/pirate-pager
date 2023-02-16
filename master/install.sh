@@ -1,1 +1,1 @@
-pip3 install waitress jproperties flask requests schedule
+pip install waitress jproperties flask requests
