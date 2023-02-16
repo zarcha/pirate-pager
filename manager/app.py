@@ -17,7 +17,7 @@ def createDB():
     connection = sqlite3.connect(configs.get("db").data)
     cur = connection.cursor()
     cur.execute("CREATE TABLE IF NOT EXISTS nodes (name PRIMARY KEY UNIQUE, address, location, frequencies, status)")  
-    cur.execute("CREATE TABLE IF NOT EXISTS pagers (handle PRIMARY KEY UNIQUE, capcode, frequency, type, nodes)")
+    cur.execute("CREATE TABLE IF NOT EXISTS pagers (handle PRIMARY KEY UNIQUE, capcode, frequency, baud, type, nodes)")
 
 @app.route("/")
 def webSendPage():
@@ -42,6 +42,12 @@ def webAddPager():
         <input type="text" style="width: 100%; height: 30px" id="capcode" pattern="[0-9]{7}" name="capcode" placeholder="0000000" required><br>
         <label for="msg">frequency:</label><br>
         <input type="number" style="width: 100%; height: 30px" step="0.0001" id="frequency" name="frequency" placeholder="000.0000" required><br>
+        <label for="type">Baudrate:</label>
+        <select style="width: 100%; height: 30px" id="baud" name="baud">
+            <option value="1200">1200</option>
+            <option value="512">512</option>
+            <option value="2400">2400</option>
+        </select>
         <label for="type">Pager Type:</label>
         <select style="width: 100%; height: 30px" id="type" name="type">
             <option value="ALPHANUMERIC">Alphanumeric</option>
@@ -126,13 +132,13 @@ def addNode():
 
 @app.route("/faddpager", methods=['POST'])
 def faddpager():
-    result = addPagerToDB(request.form.get("handle"), request.form.get("capcode"), request.form.get("frequency"), request.form.get("type"), request.form.get("nodes"))
+    result = addPagerToDB(request.form.get("handle"), request.form.get("capcode"), request.form.get("frequency"), request.form.get("baud"), request.form.get("type"), request.form.get("nodes"))
     return createHtmlPage('<p>%s</p><a href="/">return home</a>' % result), 200
 
 @app.route("/addpager", methods=['POST'])
 def addPager():
     body = json.loads(request.data)
-    result = addPagerToDB(body["handle"], body["capcode"], body["frequency"], body["type"], body["nodes"])
+    result = addPagerToDB(body["handle"], body["capcode"], body["frequency"], body["baud"], body["type"], body["nodes"])
     return result, 200
 
 @app.route("/fsendpage", methods=['POST'])
@@ -153,16 +159,14 @@ def sendPageToNodes(keys, msg):
     if msgValidation != "valid" :
         return msgValidation;
 
-    msg = msg.translate(str.maketrans({"`":  r"\`",
-                                        "\"":  r"\"",
-                                        "\\": r"\\"}))
+    msg = msg.translate(str.maketrans({"`":  r"\`", "\"":  r"\"", "\\": r"\\"}))
 
     for key in keys.split(","):
-        key = key.strip().zfill(7)
         if key.isnumeric():
-            res = cur.execute("SELECT capcode, frequency, type, nodes FROM pagers WHERE capcode='%s'" % key)
+            key = key.strip().zfill(7)
+            res = cur.execute("SELECT capcode, frequency, baud, type, nodes FROM pagers WHERE capcode='%s'" % key)
         else:
-            res = cur.execute("SELECT capcode, frequency, type, nodes FROM pagers WHERE handle='%s'" % key)
+            res = cur.execute("SELECT capcode, frequency, baud, type, nodes FROM pagers WHERE handle='%s'" % key)
         pager = res.fetchall()
 
         if len(pager) > 1:
@@ -181,7 +185,7 @@ def sendPageToNodes(keys, msg):
                 if nodeAddress:
                     nodeAddress = nodeAddress[0]
                     try:
-                        req = requests.post("%s/page" % nodeAddress, json = {"capcode": pager[0], "msg": msg, "frequency": pager[1], "type": pager[2]})
+                        req = requests.post("%s/page" % nodeAddress, json = {"capcode": pager[0], "msg": msg, "frequency": pager[1], "baud": pager[2], "type": pager[3]})
                         print ("Sent message to %s for %s with msg %s at freq %s" % (nodeAddress, pager[0], msg, pager[1]))
                         return req.text
                     except requests.exceptions.RequestException:
@@ -192,7 +196,7 @@ def sendPageToNodes(keys, msg):
         else:
             return "Pager does not exist."
 
-def addPagerToDB(handle, capcode, frequency, type, nodes):
+def addPagerToDB(handle, capcode, frequency, baud, type, nodes):
     connection = sqlite3.connect(configs.get("db").data)
     cur = connection.cursor()
     for node in nodes.split(","):
@@ -201,9 +205,10 @@ def addPagerToDB(handle, capcode, frequency, type, nodes):
         if nodeFreq:
                 nodeFreq = nodeFreq[0]
                 if verifyFreqRange(frequency, nodeFreq):
-                    cur.execute("INSERT INTO pagers VALUES ('%s', '%s', '%s', '%s', '%s') ON CONFLICT DO UPDATE SET handle='%s', capcode='%s', frequency='%s', type='%s', nodes='%s'" % (handle, capcode, frequency, type, nodes, handle, capcode, frequency, type, nodes))
+                    capcode = capcode.zfill(7)
+                    cur.execute("INSERT INTO pagers VALUES ('%s', '%s', '%s', '%s', '%s', '%s') ON CONFLICT DO UPDATE SET handle='%s', capcode='%s', frequency='%s', baud='%s', type='%s', nodes='%s'" % (handle, capcode, frequency, baud, type, nodes, handle, capcode, frequency, baud, type, nodes))
                     connection.commit()
-                    print ("Added pager with params of: '%s', '%s', '%s', '%s', '%s" % (handle, capcode, frequency, type, nodes))
+                    print ("Added pager with params of: '%s', '%s', '%s', '%s', '%s', '%s" % (handle, capcode, frequency, baud, type, nodes))
                     return "Pager has been added."
                 else:
                     return "Node %s does not support this pagers frequency, please resubmit pager with a different node." % node.strip()
