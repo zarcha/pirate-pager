@@ -21,7 +21,7 @@ def page():
   options = ""
   if body["type"] == "NUMERIC":
     options = "-n"
-  page_command = subprocess.run("echo -e \"%s:%s\" | ./pocsag -f %se6 -t 1 %s" % (body["capcode"], body["msg"], body["frequency", options]), shell=True, executable='/bin/bash')
+  page_command = subprocess.run("echo -e \"%s:%s\" | ./pocsag -f %se6 -t 1 %s" % (body["capcode"], body["msg"], body["frequency"], options), shell=True, executable='/bin/bash')
   if page_command.returncode == 0:
     return "Page sent", 200
   else:
