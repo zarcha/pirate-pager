@@ -4,3 +4,7 @@ node/Pipfile
 manager/__pycache__
 manager/pager.db
 manager/Pipfile
+
+**/.DS_Store
+
+.DS_Store
