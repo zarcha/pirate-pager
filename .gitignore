@@ -1,0 +1,6 @@
+node/__pycache__
+node/Pipfile
+
+manager/__pycache__
+manager/pager.db
+manager/Pipfile
