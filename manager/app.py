@@ -1,6 +1,7 @@
 import sqlite3
 import requests
 import re
+import string
 from threading import Thread
 from time import sleep
 from flask import Flask, request, json
@@ -22,10 +23,10 @@ def createDB():
 def webSendPage():
     html = """
     <form action="/fsendpage" method="post">
-        <label for="capcode">Pager Capcode or Handle:</label><br>
+        <label for="capcode">Destination Pager Capcode or Handle:</label><br>
         <input type="text" style="width: 100%; height: 30px" id="keys" name="keys" placeholder="0000000/pageMan69" required><br>
         <label for="msg">Message:</label><br>
-        <input type="text" style="width: 100%; height: 30px" id="msg" name="msg" value="Hello World!" required><br><br>
+        <textarea style="width: 100%; min-width: 100%; max-width:100%; height: 225px; min-height: 225px; max-height: 300px" maxlength="800" id="msg" name="msg" pattern="^\w[a-zA-Z0-9.]*$" required></textarea><br><br>
         <input type="submit" style="width: 70px; height: 30px; font-weight: bold" value="Send">
     </form>"""
     return createHtmlPage(html), 200
@@ -148,17 +149,29 @@ def sendPage():
 def sendPageToNodes(keys, msg):
     connection = sqlite3.connect(configs.get("db").data)
     cur = connection.cursor()
+    msgValidation = validateMsg(msg)
+    if msgValidation != "valid" :
+        return msgValidation;
+
+    msg = msg.translate(str.maketrans({"`":  r"\`",
+                                        "\"":  r"\"",
+                                        "\\": r"\\"}))
+
     for key in keys.split(","):
-        key = key.strip()
+        key = key.strip().zfill(7)
         if key.isnumeric():
             res = cur.execute("SELECT capcode, frequency, type, nodes FROM pagers WHERE capcode='%s'" % key)
         else:
             res = cur.execute("SELECT capcode, frequency, type, nodes FROM pagers WHERE handle='%s'" % key)
         pager = res.fetchall()
+
         if len(pager) > 1:
             return "More than one of the specified capcode exists, please use the handle instead."
+        elif len(pager) != 1:
+            pager = None
         else:
             pager = pager[0]
+
         if pager:
             if pager[2] == "NUMERIC" and not msg.isnumeric():
                 return "Pager is numeric and the message contains alphanumeric content. Please revise the message and resend."
@@ -197,6 +210,16 @@ def addPagerToDB(handle, capcode, frequency, type, nodes):
         else:
             return "Node %s does not exist, please resubmit pager application with this node removed." % node.strip()
     
+
+def validateMsg(msg):
+    if len(msg) > 800:
+        return "Message can only be 800 characters long. Please resend with a smaller message."
+    search=re.compile(r'[^a-zA-Z0-9!@#$%^&*()-_=+{[\]}|\\:;"\'?/><,]').search
+    if bool(search(msg)):
+        return "Message contains invalid characters. Please resend with a proper message containing letters, numbers, and normal special characters."
+
+    return "valid"
+
 def verifyFreqRange(pagerFreq, nodeFreq):
   if nodeFreq != "any":
     if "-" in nodeFreq:
