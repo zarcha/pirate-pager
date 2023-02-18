@@ -26,7 +26,7 @@ def webSendPage():
         <label for="capcode">Destination Pager Capcode or Handle:</label><br>
         <input type="text" style="width: 100%; height: 30px" id="keys" name="keys" placeholder="0000000/pageMan69" required><br>
         <label for="msg">Message:</label><br>
-        <textarea style="width: 100%; min-width: 100%; max-width:100%; height: 225px; min-height: 225px; max-height: 300px" maxlength="800" id="msg" name="msg" pattern="^\w[a-zA-Z0-9.]*$" required></textarea><br><br>
+        <textarea style="width: 100%; min-width: 100%; max-width:100%; height: 225px; min-height: 225px; max-height: 300px" maxlength="800" id="msg" name="msg" required></textarea><br><br>
         <input type="submit" style="width: 70px; height: 30px; font-weight: bold" value="Send">
     </form>"""
     return createHtmlPage(html), 200
@@ -155,9 +155,6 @@ def sendPage():
 def sendPageToNodes(keys, msg):
     connection = sqlite3.connect(configs.get("db").data)
     cur = connection.cursor()
-    msgValidation = validateMsg(msg)
-    if msgValidation != "valid" :
-        return msgValidation;
 
     msg = msg.translate(str.maketrans({"`":  r"\`", "\"":  r"\"", "\\": r"\\"}))
 
@@ -170,15 +167,17 @@ def sendPageToNodes(keys, msg):
         pager = res.fetchall()
 
         if len(pager) > 1:
-            return "More than one of the specified capcode exists, please use the handle instead."
+            return "More than one of the specified capcode (%s) exists, please use the handle instead." % key
         elif len(pager) != 1:
             pager = None
         else:
             pager = pager[0]
 
         if pager:
-            if pager[4] == "NUMERIC" and not msg.isnumeric():
-                return "Pager is numeric and the message contains alphanumeric content. Please revise the message and resend."
+            msgValidation = validateMsg(msg, pager[3])
+            if msgValidation != "valid":
+                return msgValidation
+
             for node in pager[3].split(","):
                 node = node.strip()
                 res = cur.execute("SELECT address FROM nodes WHERE name='%s'" % node)
@@ -186,16 +185,15 @@ def sendPageToNodes(keys, msg):
                 if nodeAddress:
                     nodeAddress = nodeAddress[0]
                     try:
-                        req = requests.post("%s/page" % nodeAddress, json = {"capcode": pager[0], "msg": msg, "frequency": pager[1], "baud": pager[2], "type": pager[3]})
+                        requests.post("%s/page" % nodeAddress, json = {"capcode": pager[0], "msg": msg, "frequency": pager[1], "baud": pager[2], "type": pager[3]})
                         print ("Sent message to %s for %s with msg %s at freq %s" % (nodeAddress, pager[0], msg, pager[1]))
-                        return req.text
                     except requests.exceptions.RequestException:
-                        print ("Node %s is not avalible." % node)
                         return "Node %s is not avalible." % node
                 else:
                     return "Node %s does not exist." % node
         else:
             return "Pager does not exist."
+    return "Page sent."
 
 def addPagerToDB(handle, capcode, frequency, baud, type, nodes):
     connection = sqlite3.connect(configs.get("db").data)
@@ -217,12 +215,19 @@ def addPagerToDB(handle, capcode, frequency, baud, type, nodes):
             return "Node %s does not exist, please resubmit pager application with this node removed." % node.strip()
     
 
-def validateMsg(msg):
-    if len(msg) > 800:
-        return "Message can only be 800 characters long. Please resend with a smaller message."
-    search=re.compile(r'w/[^a-zA-Z0-9!@#$%^&*()-_=+{[\]}|\\:;"\'?/><,]').search
-    if bool(search(msg)):
-        return "Message contains invalid characters. Please resend with a proper message containing letters, numbers, and normal special characters."
+def validateMsg(msg, type):
+    if type == "NUMERIC":
+        if len(msg) > 180:
+            return "Message can only be 180 characters long. Please resend with a smaller message."
+        search=re.compile(r'w/[^0-9-_([\])uU]').search
+        if bool(search(msg)):
+            return "Message contains invalid characters. Please resend with a proper message containing numbers or these characters ( ) [ ] _ - u U."
+    else:
+        if len(msg) > 800:
+            return "Message can only be 800 characters long. Please resend with a smaller message."
+        search=re.compile(r'w/[^a-zA-Z0-9!@#$%^&*()-_=+{[\]}|\\:;"\'?/><,]').search
+        if bool(search(msg)):
+            return "Message contains invalid characters. Please resend with a proper message containing letters, numbers, and normal special characters."
 
     return "valid"
 
